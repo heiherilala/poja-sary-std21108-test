@@ -25,6 +25,7 @@ public class PictureService {
   private final BucketComponent bucketComponent;
   private final Path TEMP_IMAGE_DIRECTORY = Path.of("/sary-temp");
   private final Path IMAGE_BUCKET_DIRECTORY = Path.of("image/");
+  private final String lambdaWorkingDirectory = "/var/task/";
 
   @Transactional
   public void uploadImageFile(File imageFile, String imageName) {
@@ -43,7 +44,9 @@ public class PictureService {
     }
     try {
       Path directoryPath =
-          Paths.get(System.getProperty("user.dir"), TEMP_IMAGE_DIRECTORY.toString());
+          //          Paths.get(System.getProperty("user.dir"), TEMP_IMAGE_DIRECTORY.toString());
+          Paths.get(lambdaWorkingDirectory, TEMP_IMAGE_DIRECTORY.toString());
+
       if (!Files.exists(directoryPath)) {
         Files.createDirectories(directoryPath);
       }
@@ -122,7 +125,9 @@ public class PictureService {
   }
 
   private Path getFilePathStartWithUser(Path directory, String filename) {
-    Path userDirectory = Paths.get(System.getProperty("user.dir"), directory.toString());
+    //    Path userDirectory = Paths.get(System.getProperty("user.dir"), directory.toString());
+    Path userDirectory = Paths.get(lambdaWorkingDirectory, directory.toString());
+
     System.out.println(userDirectory.toString());
     return Paths.get(userDirectory.toString(), filename);
   }
