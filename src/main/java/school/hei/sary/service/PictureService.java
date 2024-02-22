@@ -4,15 +4,14 @@ import ij.IJ;
 import ij.ImagePlus;
 import ij.process.ImageConverter;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.rmi.RemoteException;
 import java.time.Duration;
 import lombok.AllArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 import school.hei.sary.file.BucketComponent;
 import school.hei.sary.model.PicturesUTL;
 import school.hei.sary.repository.PictureInformationRepository;
@@ -23,9 +22,7 @@ import school.hei.sary.repository.model.PictureInformation;
 public class PictureService {
   private final PictureInformationRepository repository;
   private final BucketComponent bucketComponent;
-  private final Path TEMP_IMAGE_DIRECTORY = Path.of("/sary-temp");
   private final Path IMAGE_BUCKET_DIRECTORY = Path.of("image/");
-  private final String lambdaWorkingDirectory = "/var/task/";
 
   @Transactional
   public void uploadImageFile(File imageFile, String imageName) {
@@ -38,30 +35,19 @@ public class PictureService {
   }
 
   @Transactional
-  public String uploadAndConvertImageToBlackAndWhite(String id, MultipartFile file) {
+  public String uploadAndConvertImageToBlackAndWhite(String id, byte[] file) throws IOException {
     if (file == null) {
-      throw new RuntimeException("Image file is mandatory");
+      throw new RemoteException("Image file is mandatory");
     }
-    try {
-      Path directoryPath =
-          //          Paths.get(System.getProperty("user.dir"), TEMP_IMAGE_DIRECTORY.toString());
-          Paths.get(lambdaWorkingDirectory, TEMP_IMAGE_DIRECTORY.toString());
+    String fileEndSuffix = ".jpeg";
+    String newFileName = id + fileEndSuffix;
+    String blackFileName = id + "-black" + fileEndSuffix;
 
-      if (!Files.exists(directoryPath)) {
-        Files.createDirectories(directoryPath);
-      }
-    } catch (IOException e) {
-      throw new RuntimeException("Failed to create directory");
-    }
-    String newFileName = id + "." + getFileExtension(file);
-    String blackFileName = id + "-black." + getFileExtension(file);
+    File originalFile = File.createTempFile(newFileName, fileEndSuffix);
+    File blackTempImageFile = File.createTempFile(blackFileName, fileEndSuffix);
+    writeFileFromByteArray(file, originalFile);
+    File blackImageFile = convertImageToBlackAndWhite(originalFile, blackTempImageFile);
 
-    Path filePath = getFilePathStartWithUser(TEMP_IMAGE_DIRECTORY, newFileName);
-    writeFileFromMultipart(file, filePath);
-
-    File blackImageFile = convertImageToBlackAndWhite(filePath.toString(), blackFileName);
-
-    File originalFile = filePath.toFile();
     uploadImageFile(originalFile, newFileName);
     uploadImageFile(blackImageFile, blackFileName);
     PictureInformation toSave =
@@ -102,38 +88,26 @@ public class PictureService {
         .build();
   }
 
-  private File convertImageToBlackAndWhite(String imagePath, String blackFileName) {
-    ImagePlus image = IJ.openImage(imagePath);
+  private File writeFileFromByteArray(byte[] bytes, File file) {
+    try (FileOutputStream fos = new FileOutputStream(file)) {
+      fos.write(bytes);
+      return file;
+    } catch (IOException e) {
+      e.printStackTrace();
+      return null;
+    }
+  }
+
+  private File convertImageToBlackAndWhite(File originalFile, File outputFile) {
+    ImagePlus image = IJ.openImage(originalFile.getPath());
     try {
       ImageConverter converter = new ImageConverter(image);
       converter.convertToGray8();
     } catch (Exception e) {
       throw new RuntimeException("Image file invalid");
     }
-    Path blackFilePath = getFilePathStartWithUser(TEMP_IMAGE_DIRECTORY, blackFileName);
     ij.io.FileSaver fileSaver = new ij.io.FileSaver(image);
-    fileSaver.saveAsJpeg(blackFilePath.toString());
-    return blackFilePath.toFile();
-  }
-
-  private void writeFileFromMultipart(MultipartFile file, Path dir) {
-    try {
-      file.transferTo(dir);
-    } catch (IOException e) {
-      throw new RuntimeException(e);
-    }
-  }
-
-  private Path getFilePathStartWithUser(Path directory, String filename) {
-    //    Path userDirectory = Paths.get(System.getProperty("user.dir"), directory.toString());
-    Path userDirectory = Paths.get(lambdaWorkingDirectory, directory.toString());
-
-    System.out.println(userDirectory.toString());
-    return Paths.get(userDirectory.toString(), filename);
-  }
-
-  private String getFileExtension(MultipartFile file) {
-    String contentType = file.getContentType();
-    return contentType != null ? contentType.substring(contentType.lastIndexOf('/') + 1) : "";
+    fileSaver.saveAsJpeg(outputFile.getPath());
+    return outputFile;
   }
 }

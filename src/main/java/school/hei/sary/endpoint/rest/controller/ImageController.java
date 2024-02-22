@@ -1,5 +1,6 @@
 package school.hei.sary.endpoint.rest.controller;
 
+import java.io.IOException;
 import lombok.AllArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -18,8 +19,9 @@ public class ImageController {
   @PutMapping(value = "/blacks/{id}")
   public String getBlackAndWhiteImage(
       @PathVariable(name = "id") String id,
-      @RequestParam(value = "file", required = false) MultipartFile file) {
-    return service.uploadAndConvertImageToBlackAndWhite(id, file);
+      @RequestParam(value = "file", required = false) MultipartFile file)
+      throws IOException {
+    return service.uploadAndConvertImageToBlackAndWhite(id, file.getBytes());
   }
 
   @GetMapping(value = "/blacks/{id}")
